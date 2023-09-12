@@ -1,5 +1,57 @@
 import pandas as pd
 
+class DataValidator():
+    def __init__(self, dataset_path):
+        self.dataset_path = dataset_path
+        self.df_dict = self.load_data()
+
+    def load_data(self):
+        # Implement your data loading logic here
+        # Read the dataset into a dictionary of dataframes
+        # Example:
+        df_dict = {}
+        df_dict["Counterparty-instrument"] = pd.read_csv("counterparty_instrument.csv")
+        df_dict["Counterparty-reference"] = pd.read_csv("counterparty_reference.csv")
+        # Load other tables as needed
+        return df_dict
+
+    def apply_validation_rules(self):
+        validation_rules = RecordRules(self.df_dict)  # Create an instance of your validation class
+        validation_results = {}
+
+        # Apply each validation rule
+        for rule_name in dir(validation_rules):
+            if callable(getattr(validation_rules, rule_name)) and rule_name.startswith("CR"):  # Adjust as needed for other rule prefixes
+                rule_function = getattr(validation_rules, rule_name)
+                rule_id, table_name, invalid_rows = rule_function()
+
+                # Create a column "Correct" indicating whether each row is valid (True) or not (False)
+                invalid_rows["Correct"] = False
+                valid_rows = self.df_dict[table_name][~self.df_dict[table_name].index.isin(invalid_rows.index)]
+                valid_rows["Correct"] = True
+
+                # Combine valid and invalid rows
+                combined_df = pd.concat([valid_rows, invalid_rows])
+
+                # Store the results in the dictionary
+                validation_results[rule_id] = combined_df
+
+        return validation_results
+
+    def generate_report(self, validation_results):
+        # Implement your report generation logic here
+        # You can save the results as an Excel file, CSV, or any other format
+        # Example:
+        writer = pd.ExcelWriter("validation_report.xlsx")
+        for rule_id, df in validation_results.items():
+            df.to_excel(writer, sheet_name=rule_id, index=False)
+        writer.save()
+
+if __name__ == "__main__":
+    validator = DataValidator("your_dataset_path.csv")
+    validation_results = validator.apply_validation_rules()
+    validator.generate_report(validation_results)
+
 class RecordRules():
     def __init__(self, df_dict: dict):
         self.df_dict = df_dict
@@ -1604,7 +1656,7 @@ class RecordRules():
         
         return "RI0250", "Instrument-protection received", invalid_rows
     
-    
+
 # Example usage
 # Assuming you have your dataframes ready
 # df_counterparty_instrument = ...
